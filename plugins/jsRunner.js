@@ -5,19 +5,44 @@ var _ = require("lodash");
 // > var write = console.commands();
 // >> var write = console.commands({verbose: true});
 
+var env = {
+    version: _.clone(process.versions)
+};
+
 function executeJavascript(input, options) {
     if (input[0] !== ">" || input.length > 255) {
         return;
     }
 
     var startPos = input[1] === ">" ? 2 : 1;
+    var buffer = [];
+
+    local_env = _.cloneDeep(env);
+    local_env.console = {
+        log: function() {
+            var data = "";
+            for (var i = 0; i < arguments.length; i++) {
+                data += arguments[i];
+            }
+
+            buffer.push(data);
+        }
+    };
+
+    Object.freeze(local_env.version);
 
     try {
          // Timeout set to a bit more than 1 screen frame duration
-        return vm.runInNewContext(input.slice(startPos), {version: _.clone(process.versions)}, {
+        var result = vm.runInNewContext(input.slice(startPos), local_env, {
             timeout: 17,
             filename: (options.botname || "ai") + ".vm"
-        }).replace(/\n/g, "");
+        });
+
+        return ("" +
+            buffer.splice(0, 4).join("\n") +
+            buffer.splice(5).join("") +
+            "\n" + (result + "").replace(/\n/g, "")
+        );
     } catch (e) {
         var error = e.message;
         var lines = error.split("\n");
